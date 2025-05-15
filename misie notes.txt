@@ -1,0 +1,50 @@
+==============================================================================================
+
+--- Intro ---
+
+
+Zegar Lamporta:
+
+- Każdy proces ma swój jakiś licznik, który zaczyna się counter=0
+- Każde jakieś wydarzenie lokalne w zakresie procesu podnosi +=1
+- Gdy proces wysyła wiadomość, robi counter+=1 i załącza counter jako Timestamp do wiadomości
+- Proces który dostał wiadomość aktualizuje zegar na [max(swój counter, otrzymany timestamp) + 1]
+
+Lamport działa tak że:
+- Jak proces chce dostęp do krytycznej wysyła request (i dodaje swój request do swojej kolejki - sam do siebie req jakby), request w postaci (Timestamp, ID swoje), u nas tez bedzie Z dawane w req
+- Jak proces otrzyma request instant wysyła reply i dodaje otrzymany do swojej kolejki, sortuje ją po timestampach
+- Zeby wszedł do krytycznej musi otrzymać reply od ALL innych (ich reply muszą miec większy timestamp od naszej?) i jego timestamp jest na szczycie queue - okej ale jak wchodzi na szczyt queue jak ktoś wysłał wcześniej? -> niżej pkt
+- Kiedy kończy operacje w critical section wysyła release - usuwa siebie ze swojego queue i all procesy które otrzymają od niego queue usuwają go ze swojego
+
+
+Wstępny plan:
+1. Okręt cziluje (IDLE):
+	- odpoczynek losowy czas
+	- Obsługuje asynchronicznie REQ i RELEASE które dojdą (REQ - dopisanie do kolejki (timestamp, id, Z), posortowana po timestamp, ew secondary jak remis po id? żeby nie było deadlock, odesłanie ACK; Release usunięcie z kolejki)
+	- zwiększamy zegary lamporta przy każdej wiadomości otrzymanej
+2. Okręt chce wejść do sekcji krytycznej (REQIESTING):
+	- losujemy liczbę Z mechaników (Z<=M, można dać jakiś limit np min_Z i max_Z zmienne ile max moze byc na mechanika, min raczej 1)
+	- Tworzymy request {timestamp, id, Z)
+	- Wysyłamy REQUESTY do ALL innych (w tym do samego siebie - dopisanie sie wsm do własnej kolejki)
+	- Oczekujemy na all ACK i asynchronicznie odbieramy inne REQ, RELEASE
+	- zwiększamy zegary lamporta 
+3. WAITING - Po otrzymaniu all ACK od N-1 procesów sprawdza czy może wejść:
+		~ Czy jest w top K listy (K to ilość doków)
+		~ Jeśli jest w top K listy, to czy suma wszystkich używanych mechaników nad nim w liście + jego <= M (chodzi o to, że jeśli np jest drugi w kolejce, a jest 5 doków to nie sprawdza all 5 requestowanych mechaników tylko tych z pozycji nr 1 - nad nim)
+	- Jak spełnione powyższe wchodzi do krytycznej
+	- zwiększamy zegary lamporta
+4. W sekcji krytycznej naprawa (IN_CRITICAL)
+	- jakis sleep czy cus
+	- zwiększamy zegar lamporta
+5 Proces wychodzi z krytycznej (RELEASING)
+	- Wysłanie RELEASE i usunięcie się ze swojej kolejki
+	- zwiększamy zegary lamporta
+6. Asynchroniczna obsługa wiadomości
+	- REQUEST - dopisuje do kolejki, sortuje po timestamp, jak remis to po id, odsyła ACK
+	- ACK - robi swoje ack += 1
+	- RELEASE - uwusa z kolejki
+
+
+
+PYTANIE DO PROWADZĄCEGO:
+1. Jak ma być odbieranie komunikatów dokładnie - realnie asynchronicznie (potrzeba wprowadzenia wątków pthread), czy tak jak mamy ze wywołanie w kodzie co jakis czas
