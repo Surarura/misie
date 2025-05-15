@@ -23,7 +23,7 @@ typedef struct {
 } Request;
 
 //zmienne globalne żeby funkcje je mogły uzywac
-int K = 3;  // liczba doków
+int K = 2;  // liczba doków
 int M = 10; // liczba mechaników
 
 int id, size;
@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
         if (state == IDLE) {
             handle_messages();
             increment_clock();
-            if ((rand() % 5) == 0) {
+            if ((rand() % 3) == 0) {
                 // losowa potrzeba naprawy
                 my_z = rand() % (MAX_Z - MIN_Z + 1) + MIN_Z;
                 Request my_req = { lamport_clock, id, my_z };
@@ -159,7 +159,7 @@ int main(int argc, char **argv) {
 
         } else if (state == WAITING) {
             handle_messages();
-
+            //printf("Proces %d -> Oczekuje na ACK (ACK = %d)\n", id, ack_count);
             int pos = -1;
             for (int i = 0; i < queue_size; i++) {
                 if (queue[i].id == id) {
@@ -170,8 +170,10 @@ int main(int argc, char **argv) {
 
             if (ack_count == size - 1 && pos >= 0 && pos < K && sum_z_above_me(id) + my_z <= M) {
                 state = IN_CS;
-                printf("Proces %d -> wchodzi do sekcji krytycznej\n", id);
-            }
+                printf("Proces %d -> wchodzi do sekcji krytycznej (zajmuje Z = %d, obecne ACK = %d)\n", id, my_z, ack_count);
+            } //else if(ack_count == size - 1 && pos >= 0){
+                //printf("Proces %d -> oczekuje na zasoby\n", id);
+            //}
 
         } else if (state == IN_CS) {
             handle_messages();
@@ -183,10 +185,8 @@ int main(int argc, char **argv) {
             remove_from_queue(id);
             state = IDLE;
         }
-
         usleep(100000); // 100ms
     }
-
     MPI_Finalize();
     return 0;
 }
